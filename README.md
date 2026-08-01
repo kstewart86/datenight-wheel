@@ -12,20 +12,34 @@ Then open <http://localhost:4321>. No dependencies, no install step — just Nod
 
 Use a different port with `node server.js --port 8080`.
 
-## How the list is saved
+## Two wheels
 
-`data/restaurants.json` is the source of truth. Adding, renaming, or removing a
-place through the site writes straight back to that file, so the list is
-permanent and lives in the repo — commit it and it travels with the project.
+- **🍽️ Dinner** — where to eat, from `data/restaurants.json`
+- **🍸 Drinks** — which bar, from `data/bars.json`
 
-Opening `index.html` directly from disk (without the server) still works, but
-edits are then kept in browser storage only; the page says so under the list.
+Each entry has a `weight`: how many slices it gets on the wheel. Weight 1 is the
+default; the bar wheel ships with Lobby and Bones at 8 each against Jack's and
+Stay Home at 1, so the two favourites take ~44% each and the long shots ~6%.
+Repeated slices are interleaved around the wheel rather than stacked into one
+wedge, so it reads like a roulette wheel instead of a pie chart.
+
+## How the lists are saved
+
+`data/restaurants.json` and `data/bars.json` are the source of truth. Adding,
+editing, or removing a place through the site writes straight back to those
+files, so the lists are permanent and live in the repo — commit them and they
+travel with the project.
+
+Opening `index.html` from disk, or visiting a static host like GitHub Pages,
+still works, but edits are then kept in that browser's storage only; the page
+says which mode it's in under the list.
 
 ## Features
 
-- Weighted-free random spin with easing, ticking, and a confetti finish
-- Add, rename, and delete entries
-- Last 12 spins kept as history (stored per-browser)
+- Weighted random spin with easing, ticking, and a confetti finish
+- Add, rename, re-weight, and delete entries on either wheel
+- Live odds per entry (`×8 · 44%`)
+- Last 12 spins kept per wheel as history (stored per-browser)
 - Sound toggle, keyboard `Space` to spin, responsive down to phone width
 
 ## Files
@@ -35,5 +49,6 @@ edits are then kept in browser storage only; the page says so under the list.
 | `index.html` | Page markup |
 | `styles.css` | All styling |
 | `app.js` | Wheel rendering, spin physics, sound, confetti, list + history UI |
-| `server.js` | Static file server + JSON API that writes `data/restaurants.json` |
-| `data/restaurants.json` | The list itself |
+| `server.js` | Static file server + JSON API that writes the data files |
+| `data/restaurants.json` | The dinner list |
+| `data/bars.json` | The bar list |

@@ -2,17 +2,40 @@
 (() => {
   'use strict';
 
-  // Fallback list, used only when the page is opened straight from disk and
-  // data/restaurants.json can't be fetched. The server copy is the real source.
-  const SEED = [
-    { id: 'grand-old-house', name: 'Grand Old House' },
-    { id: 'the-wharf', name: 'The Wharf' },
-    { id: 'agua', name: 'Agua' },
-    { id: 'marios', name: "Mario's" },
-    { id: 'bonny-moon-beach-club', name: 'Bonny Moon Beach Club' },
-    { id: 'luca', name: 'Luca' },
-    { id: 'ms-pipers', name: "Ms. Piper's" },
-  ];
+  // Fallback lists, used only when the page is opened straight from disk and
+  // data/*.json can't be fetched. The server copies are the real source.
+  const SEED = {
+    restaurants: [
+      { id: 'grand-old-house', name: 'Grand Old House', weight: 1 },
+      { id: 'the-wharf', name: 'The Wharf', weight: 1 },
+      { id: 'agua', name: 'Agua', weight: 1 },
+      { id: 'marios', name: "Mario's", weight: 1 },
+      { id: 'bonny-moon-beach-club', name: 'Bonny Moon Beach Club', weight: 1 },
+      { id: 'luca', name: 'Luca', weight: 1 },
+      { id: 'ms-pipers', name: "Ms. Piper's", weight: 1 },
+    ],
+    bars: [
+      { id: 'lobby', name: 'Lobby', weight: 8 },
+      { id: 'bones', name: 'Bones', weight: 8 },
+      { id: 'jacks', name: "Jack's", weight: 1 },
+      { id: 'stay-home', name: 'Stay Home', weight: 1 },
+    ],
+  };
+
+  const WHEELS = {
+    restaurants: {
+      tagline: 'Where are we eating tonight?',
+      panelTitle: 'The lineup',
+      placeholder: 'Add a new restaurant…',
+      confirmWord: 'restaurant',
+    },
+    bars: {
+      tagline: 'What bar should we go to?',
+      panelTitle: 'The bars',
+      placeholder: 'Add a new bar…',
+      confirmWord: 'bar',
+    },
+  };
 
   const COLORS = [
     '#e23e6b', '#f2843c', '#ffc46b', '#7bc47f',
@@ -22,10 +45,10 @@
 
   const TAU = Math.PI * 2;
   const POINTER = -Math.PI / 2; // wheel pointer sits at 12 o'clock
-  const HISTORY_KEY = 'dnw.history';
-  const LIST_KEY = 'dnw.list';
   const SOUND_KEY = 'dnw.sound';
+  const TAB_KEY = 'dnw.tab';
   const MAX_HISTORY = 12;
+  const MAX_WEIGHT = 50;
 
   const $ = (id) => document.getElementById(id);
   const els = {
@@ -37,24 +60,38 @@
     count: $('count'),
     form: $('add-form'),
     input: $('add-input'),
+    weight: $('add-weight'),
     notice: $('notice'),
     history: $('history'),
     clearHistory: $('clear-history'),
     storageNote: $('storage-note'),
     sound: $('sound'),
+    tagline: $('tagline'),
+    panelTitle: $('panel-title'),
+    tabs: Array.from(document.querySelectorAll('.tab')),
   };
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  let restaurants = [];
-  let history = load(HISTORY_KEY, []);
+  // Per-wheel state. `slices` holds one entry index per wheel slice, so an
+  // item with weight 8 appears in eight places.
+  const state = {
+    restaurants: { items: [], slices: [], rotation: 0, history: [] },
+    bars: { items: [], slices: [], rotation: 0, history: [] },
+  };
+
+  let active = 'restaurants';
   let hasApi = false;
-  let rotation = 0;
   let spinning = false;
+
+  const wheel = () => state[active];
 
   /* ------------------------------------------------------------------ *
    * storage
    * ------------------------------------------------------------------ */
+
+  const historyKey = (list) => `dnw.history.${list}`;
+  const listKey = (list) => `dnw.list.${list}`;
 
   function load(key, fallback) {
     try {
@@ -80,8 +117,8 @@
     );
   }
 
-  async function api(path, options) {
-    const res = await fetch(`/api/restaurants${path}`, {
+  async function api(list, path, options) {
+    const res = await fetch(`/api/${list}${path}`, {
       headers: { 'Content-Type': 'application/json' },
       ...options,
     });
@@ -90,36 +127,95 @@
     return data;
   }
 
-  async function loadRestaurants() {
-    try {
-      restaurants = await api('', { method: 'GET' });
-      hasApi = true;
-      els.storageNote.textContent = 'Saved to data/restaurants.json — changes stick for good.';
+  function normalise(items) {
+    return items.map((r) => ({ ...r, weight: Math.max(1, Math.min(MAX_WEIGHT, Number(r.weight) || 1)) }));
+  }
+
+  async function loadWheel(list) {
+    if (hasApi) {
+      state[list].items = normalise(await api(list, '', { method: 'GET' }));
       return;
+    }
+
+    const stored = load(listKey(list), null);
+    if (stored) {
+      state[list].items = normalise(stored);
+      return;
+    }
+    try {
+      const res = await fetch(`data/${list}.json`);
+      if (!res.ok) throw new Error('missing');
+      state[list].items = normalise(await res.json());
+    } catch {
+      state[list].items = normalise(SEED[list]);
+    }
+  }
+
+  async function loadEverything() {
+    try {
+      state.restaurants.items = normalise(await api('restaurants', '', { method: 'GET' }));
+      hasApi = true;
     } catch {
       hasApi = false;
     }
 
-    const stored = load(LIST_KEY, null);
-    if (stored) {
-      restaurants = stored;
+    if (hasApi) {
+      await loadWheel('bars');
+      els.storageNote.textContent = 'Saved to data/ in the project — changes stick for good.';
     } else {
-      try {
-        const res = await fetch('data/restaurants.json');
-        restaurants = await res.json();
-      } catch {
-        restaurants = SEED.slice();
-      }
+      await loadWheel('restaurants');
+      await loadWheel('bars');
+      els.storageNote.textContent =
+        location.protocol === 'file:'
+          ? 'Opened as a file: changes are saved in this browser only. Run "node server.js" to save them into data/.'
+          : 'Read-only hosting: additions are saved in this browser only, not to the data files, and other devices won’t see them.';
     }
-    els.storageNote.textContent =
-      location.protocol === 'file:'
-        ? 'Opened as a file: changes are saved in this browser only. Run "node server.js" to save them into data/restaurants.json.'
-        : 'Read-only hosting: additions are saved in this browser only, not to data/restaurants.json, and other devices won’t see them.';
+
+    Object.keys(state).forEach((list) => {
+      state[list].history = load(historyKey(list), []);
+      rebuildSlices(list);
+    });
   }
 
-  function persistLocal() {
-    if (!hasApi) save(LIST_KEY, restaurants);
+  function persistLocal(list) {
+    if (!hasApi) save(listKey(list), state[list].items);
   }
+
+  /* ------------------------------------------------------------------ *
+   * slices
+   * ------------------------------------------------------------------ */
+
+  // Expand weights into individual slices, interleaved so repeats of the same
+  // place are spread around the wheel instead of forming one giant wedge.
+  // Uses the Sainte-Laguë divisor method: pick whoever is furthest behind.
+  function buildSlices(items) {
+    const total = items.reduce((sum, r) => sum + r.weight, 0);
+    const placed = items.map(() => 0);
+    const slices = [];
+
+    for (let n = 0; n < total; n++) {
+      let best = -1;
+      let bestScore = -Infinity;
+      items.forEach((r, i) => {
+        if (placed[i] >= r.weight) return;
+        const score = r.weight / (2 * placed[i] + 1);
+        if (score > bestScore) {
+          bestScore = score;
+          best = i;
+        }
+      });
+      if (best === -1) break;
+      placed[best]++;
+      slices.push(best);
+    }
+    return slices;
+  }
+
+  function rebuildSlices(list) {
+    state[list].slices = buildSlices(state[list].items);
+  }
+
+  const totalWeight = (items) => items.reduce((sum, r) => sum + r.weight, 0);
 
   /* ------------------------------------------------------------------ *
    * mutations
@@ -130,57 +226,76 @@
     els.notice.hidden = !message;
   }
 
-  function cleanName(value) {
-    return value.trim().replace(/\s+/g, ' ');
+  const cleanName = (value) => value.trim().replace(/\s+/g, ' ');
+
+  function cleanWeight(value) {
+    if (value === '' || value === undefined || value === null) return 1;
+    const weight = Number(value);
+    if (!Number.isInteger(weight) || weight < 1 || weight > MAX_WEIGHT) {
+      throw new Error(`Slices must be a whole number from 1 to ${MAX_WEIGHT}.`);
+    }
+    return weight;
   }
 
-  async function addRestaurant(rawName) {
+  function assertNameFree(items, name, exceptId) {
+    if (items.some((r) => r.id !== exceptId && r.name.toLowerCase() === name.toLowerCase())) {
+      throw new Error(`${name} is already on the wheel.`);
+    }
+  }
+
+  async function addEntry(list, rawName, rawWeight) {
     const name = cleanName(rawName);
+    const weight = cleanWeight(rawWeight);
     if (!name) return false;
 
     if (hasApi) {
-      restaurants = await api('', { method: 'POST', body: JSON.stringify({ name }) });
-      return true;
+      state[list].items = normalise(
+        await api(list, '', { method: 'POST', body: JSON.stringify({ name, weight }) })
+      );
+    } else {
+      assertNameFree(state[list].items, name);
+      let id = slugify(name);
+      const taken = new Set(state[list].items.map((r) => r.id));
+      for (let n = 2; taken.has(id); n++) id = `${slugify(name)}-${n}`;
+      state[list].items.push({ id, name, weight });
+      persistLocal(list);
     }
-
-    if (restaurants.some((r) => r.name.toLowerCase() === name.toLowerCase())) {
-      throw new Error(`${name} is already on the wheel.`);
-    }
-    let id = slugify(name);
-    const taken = new Set(restaurants.map((r) => r.id));
-    for (let n = 2; taken.has(id); n++) id = `${slugify(name)}-${n}`;
-    restaurants.push({ id, name });
-    persistLocal();
+    rebuildSlices(list);
     return true;
   }
 
-  async function renameRestaurant(id, rawName) {
+  async function updateEntry(list, id, rawName, rawWeight) {
     const name = cleanName(rawName);
-    if (!name) throw new Error('Please give the place a name.');
+    const weight = cleanWeight(rawWeight);
+    if (!name) throw new Error('Please give it a name.');
 
     if (hasApi) {
-      restaurants = await api(`/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        body: JSON.stringify({ name }),
-      });
-      return;
+      state[list].items = normalise(
+        await api(list, `/${encodeURIComponent(id)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ name, weight }),
+        })
+      );
+    } else {
+      assertNameFree(state[list].items, name, id);
+      const target = state[list].items.find((r) => r.id === id);
+      if (target) {
+        target.name = name;
+        target.weight = weight;
+      }
+      persistLocal(list);
     }
-
-    if (restaurants.some((r) => r.id !== id && r.name.toLowerCase() === name.toLowerCase())) {
-      throw new Error(`${name} is already on the wheel.`);
-    }
-    const target = restaurants.find((r) => r.id === id);
-    if (target) target.name = name;
-    persistLocal();
+    rebuildSlices(list);
   }
 
-  async function removeRestaurant(id) {
+  async function removeEntry(list, id) {
     if (hasApi) {
-      restaurants = await api(`/${encodeURIComponent(id)}`, { method: 'DELETE' });
-      return;
+      state[list].items = normalise(await api(list, `/${encodeURIComponent(id)}`, { method: 'DELETE' }));
+    } else {
+      state[list].items = state[list].items.filter((r) => r.id !== id);
+      persistLocal(list);
     }
-    restaurants = restaurants.filter((r) => r.id !== id);
-    persistLocal();
+    rebuildSlices(list);
   }
 
   /* ------------------------------------------------------------------ *
@@ -260,11 +375,12 @@
   }
 
   function drawWheel() {
+    const { items, slices, rotation } = wheel();
     const c = size / 2;
     const radius = c - 6;
     ctx.clearRect(0, 0, size, size);
 
-    if (restaurants.length === 0) {
+    if (slices.length === 0) {
       ctx.beginPath();
       ctx.arc(c, c, radius, 0, TAU);
       ctx.fillStyle = 'rgba(255,255,255,0.06)';
@@ -276,25 +392,25 @@
       ctx.font = `600 ${Math.max(13, size * 0.036)}px "Segoe UI", system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Add a place to begin', c, c * 0.55);
+      ctx.fillText('Add somewhere to begin', c, c * 0.55);
       return;
     }
 
-    const seg = TAU / restaurants.length;
-    const fontSize = Math.max(11, Math.min(size * 0.042, (size * 0.9) / restaurants.length, 22));
+    const seg = TAU / slices.length;
+    const fontSize = Math.max(9, Math.min(size * 0.042, (size * 1.05) / slices.length, 22));
 
-    restaurants.forEach((r, i) => {
+    slices.forEach((itemIndex, i) => {
+      const item = items[itemIndex];
       const start = rotation + i * seg;
-      const end = start + seg;
 
       ctx.beginPath();
       ctx.moveTo(c, c);
-      ctx.arc(c, c, radius, start, end);
+      ctx.arc(c, c, radius, start, start + seg);
       ctx.closePath();
-      ctx.fillStyle = COLORS[i % COLORS.length];
+      ctx.fillStyle = COLORS[itemIndex % COLORS.length];
       ctx.fill();
       ctx.strokeStyle = 'rgba(20, 11, 31, 0.55)';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = slices.length > 24 ? 1 : 2;
       ctx.stroke();
 
       ctx.save();
@@ -304,11 +420,10 @@
       ctx.textBaseline = 'middle';
       ctx.font = `700 ${fontSize}px "Segoe UI", system-ui, sans-serif`;
       ctx.fillStyle = 'rgba(24, 12, 30, 0.92)';
-      ctx.fillText(fitText(r.name, radius * 0.68), radius - radius * 0.12, 0);
+      ctx.fillText(fitText(item.name, radius * 0.68), radius - radius * 0.12, 0);
       ctx.restore();
     });
 
-    // hub ring
     ctx.beginPath();
     ctx.arc(c, c, radius * 0.16, 0, TAU);
     ctx.fillStyle = 'rgba(20, 11, 31, 0.9)';
@@ -321,16 +436,18 @@
     ctx.stroke();
   }
 
-  function winnerAt(rot) {
-    if (restaurants.length === 0) return null;
-    const seg = TAU / restaurants.length;
+  function sliceAt(rot) {
+    const { slices } = wheel();
+    if (slices.length === 0) return -1;
+    const seg = TAU / slices.length;
     const offset = ((POINTER - rot) % TAU + TAU) % TAU;
-    return restaurants[Math.floor(offset / seg) % restaurants.length];
+    return Math.floor(offset / seg) % slices.length;
   }
 
-  function boundaryCount(rot) {
-    const seg = TAU / restaurants.length;
-    return Math.floor(((POINTER - rot) % TAU + TAU) % TAU / seg);
+  function winnerAt(rot) {
+    const { items, slices } = wheel();
+    const index = sliceAt(rot);
+    return index === -1 ? null : items[slices[index]];
   }
 
   /* ------------------------------------------------------------------ *
@@ -338,54 +455,56 @@
    * ------------------------------------------------------------------ */
 
   function spin() {
-    if (spinning || restaurants.length === 0) return;
+    const w = wheel();
+    if (spinning || w.slices.length === 0) return;
     spinning = true;
     els.spin.disabled = true;
     els.result.classList.remove('win');
     els.result.innerHTML = '<span class="result-label">Spinning…</span>';
     sound.unlock();
 
-    const seg = TAU / restaurants.length;
-    const index = Math.floor(Math.random() * restaurants.length);
+    const list = active;
+    const seg = TAU / w.slices.length;
+    const target = Math.floor(Math.random() * w.slices.length);
     // Land somewhere inside the chosen slice, but not right on an edge.
     const jitter = (Math.random() * 0.7 + 0.15) * seg;
-    const targetRotation = POINTER - index * seg - jitter;
-    const delta = ((targetRotation - rotation) % TAU + TAU) % TAU;
+    const targetRotation = POINTER - target * seg - jitter;
+    const from = w.rotation;
+    const delta = ((targetRotation - from) % TAU + TAU) % TAU;
     const turns = 5 + Math.floor(Math.random() * 3);
-    const from = rotation;
     const distance = turns * TAU + delta;
     const duration = reduceMotion ? 600 : 4600 + Math.random() * 900;
 
-    let lastBoundary = boundaryCount(rotation);
+    let lastSlice = sliceAt(from);
     const start = performance.now();
 
     function frame(now) {
       const t = Math.min((now - start) / duration, 1);
       const eased = 1 - Math.pow(1 - t, 4); // easeOutQuart
-      rotation = from + distance * eased;
-      drawWheel();
+      w.rotation = from + distance * eased;
+      if (active === list) drawWheel();
 
-      const boundary = boundaryCount(rotation);
-      if (boundary !== lastBoundary) {
-        lastBoundary = boundary;
+      const current = sliceAt(w.rotation);
+      if (current !== lastSlice) {
+        lastSlice = current;
         sound.tick(1 - t * 0.6);
       }
 
       if (t < 1) {
         requestAnimationFrame(frame);
       } else {
-        rotation = ((from + distance) % TAU + TAU) % TAU;
-        drawWheel();
-        finish(winnerAt(rotation));
+        w.rotation = ((from + distance) % TAU + TAU) % TAU;
+        if (active === list) drawWheel();
+        finish(list, winnerAt(w.rotation));
       }
     }
 
     requestAnimationFrame(frame);
   }
 
-  function finish(winner) {
+  function finish(list, winner) {
     spinning = false;
-    els.spin.disabled = false;
+    els.spin.disabled = state[active].slices.length === 0;
     if (!winner) return;
 
     els.result.textContent = `Tonight: ${winner.name}`;
@@ -393,9 +512,9 @@
     sound.fanfare();
     if (!reduceMotion) launchConfetti();
 
-    history.unshift({ name: winner.name, at: Date.now() });
-    history = history.slice(0, MAX_HISTORY);
-    save(HISTORY_KEY, history);
+    state[list].history.unshift({ name: winner.name, at: Date.now() });
+    state[list].history = state[list].history.slice(0, MAX_HISTORY);
+    save(historyKey(list), state[list].history);
     renderHistory();
   }
 
@@ -474,21 +593,23 @@
    * ------------------------------------------------------------------ */
 
   function renderList() {
+    const { items, slices } = wheel();
+    const total = totalWeight(items);
     els.list.innerHTML = '';
-    els.count.textContent = String(restaurants.length);
-    els.spin.disabled = spinning || restaurants.length === 0;
+    els.count.textContent = slices.length === items.length ? String(items.length) : `${items.length} · ${slices.length} slices`;
+    els.spin.disabled = spinning || slices.length === 0;
 
-    if (restaurants.length === 0) {
+    if (items.length === 0) {
       const li = document.createElement('li');
       li.className = 'empty';
-      li.textContent = 'The wheel is empty. Add somewhere to eat!';
+      li.textContent = 'The wheel is empty. Add somewhere to go!';
       els.list.append(li);
       return;
     }
 
-    restaurants.forEach((r, i) => {
+    items.forEach((item, i) => {
       const li = document.createElement('li');
-      li.dataset.id = r.id;
+      li.dataset.id = item.id;
 
       const swatch = document.createElement('span');
       swatch.className = 'swatch';
@@ -496,40 +617,56 @@
 
       const name = document.createElement('span');
       name.className = 'name';
-      name.textContent = r.name;
+      name.textContent = item.name;
+
+      const odds = document.createElement('span');
+      odds.className = 'odds';
+      const pct = total ? Math.round((item.weight / total) * 100) : 0;
+      odds.innerHTML = `×${item.weight} · <b>${pct}%</b>`;
+      odds.title = `${item.weight} of ${total} slices`;
 
       const edit = document.createElement('button');
       edit.type = 'button';
       edit.className = 'icon-btn';
-      edit.title = `Rename ${r.name}`;
-      edit.setAttribute('aria-label', `Rename ${r.name}`);
+      edit.title = `Edit ${item.name}`;
+      edit.setAttribute('aria-label', `Edit ${item.name}`);
       edit.textContent = '✎';
-      edit.addEventListener('click', () => startEdit(li, r));
+      edit.addEventListener('click', () => startEdit(li, item));
 
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'icon-btn danger';
-      del.title = `Remove ${r.name}`;
-      del.setAttribute('aria-label', `Remove ${r.name}`);
+      del.title = `Remove ${item.name}`;
+      del.setAttribute('aria-label', `Remove ${item.name}`);
       del.textContent = '✕';
       del.addEventListener('click', async () => {
-        if (!window.confirm(`Remove ${r.name} from the wheel?`)) return;
-        await guard(() => removeRestaurant(r.id));
+        if (!window.confirm(`Remove ${item.name} from the wheel?`)) return;
+        const list = active;
+        await guard(() => removeEntry(list, item.id));
       });
 
-      li.append(swatch, name, edit, del);
+      li.append(swatch, name, odds, edit, del);
       els.list.append(li);
     });
   }
 
-  function startEdit(li, restaurant) {
+  function startEdit(li, item) {
+    const list = active;
     li.innerHTML = '';
 
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.maxLength = 60;
-    input.value = restaurant.name;
-    input.setAttribute('aria-label', 'Restaurant name');
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.maxLength = 60;
+    nameInput.value = item.name;
+    nameInput.setAttribute('aria-label', 'Name');
+
+    const weightInput = document.createElement('input');
+    weightInput.type = 'number';
+    weightInput.min = '1';
+    weightInput.max = String(MAX_WEIGHT);
+    weightInput.value = String(item.weight);
+    weightInput.setAttribute('aria-label', 'Slices on the wheel');
+    weightInput.title = 'How many slices it gets';
 
     const confirm = document.createElement('button');
     confirm.type = 'button';
@@ -543,29 +680,33 @@
     cancel.textContent = '✕';
     cancel.title = 'Cancel';
 
-    const commit = () => guard(() => renameRestaurant(restaurant.id, input.value));
-
-    confirm.addEventListener('click', commit);
-    cancel.addEventListener('click', () => {
+    const commit = () => guard(() => updateEntry(list, item.id, nameInput.value, weightInput.value));
+    const abandon = () => {
       showNotice('');
       renderList();
-    });
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        commit();
-      } else if (e.key === 'Escape') {
-        showNotice('');
-        renderList();
-      }
+    };
+
+    confirm.addEventListener('click', commit);
+    cancel.addEventListener('click', abandon);
+
+    [nameInput, weightInput].forEach((input) => {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commit();
+        } else if (e.key === 'Escape') {
+          abandon();
+        }
+      });
     });
 
-    li.append(input, confirm, cancel);
-    input.focus();
-    input.select();
+    li.append(nameInput, weightInput, confirm, cancel);
+    nameInput.focus();
+    nameInput.select();
   }
 
   function renderHistory() {
+    const { history } = wheel();
     els.history.innerHTML = '';
     els.clearHistory.hidden = history.length === 0;
 
@@ -610,24 +751,60 @@
     }
   }
 
+  function switchTo(list) {
+    if (!state[list] || list === active) return;
+    active = list;
+    save(TAB_KEY, list);
+
+    els.tabs.forEach((tab) => {
+      const on = tab.dataset.list === list;
+      tab.classList.toggle('is-active', on);
+      tab.setAttribute('aria-selected', String(on));
+    });
+
+    const config = WHEELS[list];
+    els.tagline.textContent = config.tagline;
+    els.panelTitle.textContent = config.panelTitle;
+    els.input.placeholder = config.placeholder;
+    els.input.value = '';
+    els.weight.value = '1';
+
+    showNotice('');
+    els.result.classList.remove('win');
+    els.result.innerHTML = '<span class="result-label">Pick a fate</span>';
+    renderList();
+    renderHistory();
+    drawWheel();
+  }
+
   /* ------------------------------------------------------------------ *
    * wiring
    * ------------------------------------------------------------------ */
 
+  els.tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      if (spinning) return;
+      switchTo(tab.dataset.list);
+    });
+  });
+
   els.form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const value = els.input.value;
-    if (!cleanName(value)) return;
-    const ok = await guard(() => addRestaurant(value));
-    if (ok) els.input.value = '';
+    const list = active;
+    if (!cleanName(els.input.value)) return;
+    const ok = await guard(() => addEntry(list, els.input.value, els.weight.value));
+    if (ok) {
+      els.input.value = '';
+      els.weight.value = '1';
+    }
     els.input.focus();
   });
 
   els.spin.addEventListener('click', spin);
 
   els.clearHistory.addEventListener('click', () => {
-    history = [];
-    save(HISTORY_KEY, history);
+    wheel().history = [];
+    save(historyKey(active), []);
     renderHistory();
   });
 
@@ -650,7 +827,19 @@
   });
 
   (async function init() {
-    await loadRestaurants();
+    await loadEverything();
+
+    const saved = load(TAB_KEY, 'restaurants');
+    if (state[saved] && saved !== active) {
+      active = 'restaurants';
+      switchTo(saved);
+    } else {
+      const config = WHEELS[active];
+      els.tagline.textContent = config.tagline;
+      els.panelTitle.textContent = config.panelTitle;
+      els.input.placeholder = config.placeholder;
+    }
+
     sizeConfetti();
     resizeCanvas();
     renderList();

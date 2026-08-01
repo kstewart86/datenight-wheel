@@ -2,8 +2,8 @@
  * Date Night Wheel — tiny zero-dependency server.
  *
  * Serves the static site and exposes a small JSON API that writes additions,
- * edits and deletions straight back into data/restaurants.json, so the list
- * really is saved in the project's own file.
+ * edits and deletions straight back into data/*.json, so the lists really are
+ * saved in the project's own files.
  *
  *   node server.js            -> http://localhost:4321
  *   node server.js --port 8080
@@ -15,7 +15,10 @@ const fsp = fs.promises;
 const path = require('path');
 
 const ROOT = __dirname;
-const DATA_FILE = path.join(ROOT, 'data', 'restaurants.json');
+const DATA_DIR = path.join(ROOT, 'data');
+
+// The wheels the API will serve. Anything else is a 404.
+const LISTS = new Set(['restaurants', 'bars']);
 
 const portFlag = process.argv.indexOf('--port');
 const PORT = Number(process.env.PORT || (portFlag !== -1 && process.argv[portFlag + 1]) || 4321);
@@ -31,6 +34,17 @@ const MIME = {
 };
 
 const MAX_NAME_LENGTH = 60;
+const MAX_WEIGHT = 50;
+
+function fail(message, status) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
+
+function fileFor(list) {
+  return path.join(DATA_DIR, `${list}.json`);
+}
 
 function slugify(name) {
   return (
@@ -49,9 +63,9 @@ function uniqueId(base, taken) {
   return id;
 }
 
-async function readList() {
+async function readList(list) {
   try {
-    const raw = await fsp.readFile(DATA_FILE, 'utf8');
+    const raw = await fsp.readFile(fileFor(list), 'utf8');
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
@@ -60,12 +74,13 @@ async function readList() {
   }
 }
 
-// Write to a temp file first so a crash mid-write can never truncate the list.
-async function writeList(list) {
-  await fsp.mkdir(path.dirname(DATA_FILE), { recursive: true });
-  const tmp = `${DATA_FILE}.tmp`;
-  await fsp.writeFile(tmp, `${JSON.stringify(list, null, 2)}\n`, 'utf8');
-  await fsp.rename(tmp, DATA_FILE);
+// Write to a temp file first so a crash mid-write can never truncate a list.
+async function writeList(list, items) {
+  await fsp.mkdir(DATA_DIR, { recursive: true });
+  const target = fileFor(list);
+  const tmp = `${target}.tmp`;
+  await fsp.writeFile(tmp, `${JSON.stringify(items, null, 2)}\n`, 'utf8');
+  await fsp.rename(tmp, target);
 }
 
 function send(res, status, body, headers = {}) {
@@ -82,14 +97,14 @@ function readBody(req) {
     let raw = '';
     req.on('data', (chunk) => {
       raw += chunk;
-      if (raw.length > 10_000) reject(new Error('Body too large'));
+      if (raw.length > 10_000) reject(fail('Body too large', 413));
     });
     req.on('end', () => {
       if (!raw) return resolve({});
       try {
         resolve(JSON.parse(raw));
       } catch {
-        reject(new Error('Invalid JSON'));
+        reject(fail('Invalid JSON', 400));
       }
     });
     req.on('error', reject);
@@ -98,9 +113,25 @@ function readBody(req) {
 
 function cleanName(value) {
   const name = typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
-  if (!name) throw new Error('Please give the place a name.');
-  if (name.length > MAX_NAME_LENGTH) throw new Error(`Keep it under ${MAX_NAME_LENGTH} characters.`);
+  if (!name) throw fail('Please give it a name.', 400);
+  if (name.length > MAX_NAME_LENGTH) throw fail(`Keep it under ${MAX_NAME_LENGTH} characters.`, 400);
   return name;
+}
+
+// How many slices this entry gets on the wheel.
+function cleanWeight(value) {
+  if (value === undefined || value === null || value === '') return 1;
+  const weight = Number(value);
+  if (!Number.isInteger(weight) || weight < 1 || weight > MAX_WEIGHT) {
+    throw fail(`Slices must be a whole number from 1 to ${MAX_WEIGHT}.`, 400);
+  }
+  return weight;
+}
+
+function assertNameFree(items, name, exceptId) {
+  if (items.some((r) => r.id !== exceptId && r.name.toLowerCase() === name.toLowerCase())) {
+    throw fail(`${name} is already on the wheel.`, 409);
+  }
 }
 
 // Serialise writes so two quick clicks can't clobber each other.
@@ -112,29 +143,29 @@ function mutate(fn) {
 }
 
 async function handleApi(req, res, url) {
-  const id = decodeURIComponent(url.pathname.replace('/api/restaurants', '').replace(/^\//, ''));
+  const parts = url.pathname.split('/').filter(Boolean); // ['api', list, id?]
+  const list = parts[1];
+  const id = parts[2] ? decodeURIComponent(parts[2]) : '';
+
+  if (!LISTS.has(list) || parts.length > 3) throw fail('Not found', 404);
 
   if (req.method === 'GET' && !id) {
-    return sendJson(res, 200, await readList());
+    return sendJson(res, 200, await readList(list));
   }
 
   if (req.method === 'POST' && !id) {
     const body = await readBody(req);
     const name = cleanName(body.name);
+    const weight = cleanWeight(body.weight);
     return sendJson(
       res,
       201,
       await mutate(async () => {
-        const list = await readList();
-        if (list.some((r) => r.name.toLowerCase() === name.toLowerCase())) {
-          const err = new Error(`${name} is already on the wheel.`);
-          err.status = 409;
-          throw err;
-        }
-        const entry = { id: uniqueId(slugify(name), new Set(list.map((r) => r.id))), name };
-        list.push(entry);
-        await writeList(list);
-        return list;
+        const items = await readList(list);
+        assertNameFree(items, name);
+        items.push({ id: uniqueId(slugify(name), new Set(items.map((r) => r.id))), name, weight });
+        await writeList(list, items);
+        return items;
       })
     );
   }
@@ -142,25 +173,19 @@ async function handleApi(req, res, url) {
   if (req.method === 'PUT' && id) {
     const body = await readBody(req);
     const name = cleanName(body.name);
+    const weight = cleanWeight(body.weight);
     return sendJson(
       res,
       200,
       await mutate(async () => {
-        const list = await readList();
-        const target = list.find((r) => r.id === id);
-        if (!target) {
-          const err = new Error('That place is no longer on the wheel.');
-          err.status = 404;
-          throw err;
-        }
-        if (list.some((r) => r.id !== id && r.name.toLowerCase() === name.toLowerCase())) {
-          const err = new Error(`${name} is already on the wheel.`);
-          err.status = 409;
-          throw err;
-        }
+        const items = await readList(list);
+        const target = items.find((r) => r.id === id);
+        if (!target) throw fail('That one is no longer on the wheel.', 404);
+        assertNameFree(items, name, id);
         target.name = name;
-        await writeList(list);
-        return list;
+        target.weight = weight;
+        await writeList(list, items);
+        return items;
       })
     );
   }
@@ -170,17 +195,15 @@ async function handleApi(req, res, url) {
       res,
       200,
       await mutate(async () => {
-        const list = await readList();
-        const next = list.filter((r) => r.id !== id);
-        if (next.length !== list.length) await writeList(next);
+        const items = await readList(list);
+        const next = items.filter((r) => r.id !== id);
+        if (next.length !== items.length) await writeList(list, next);
         return next;
       })
     );
   }
 
-  const err = new Error('Not found');
-  err.status = 404;
-  throw err;
+  throw fail('Not found', 404);
 }
 
 async function handleStatic(res, url) {
@@ -201,7 +224,7 @@ async function handleStatic(res, url) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
-    if (url.pathname.startsWith('/api/restaurants')) {
+    if (url.pathname.startsWith('/api/')) {
       await handleApi(req, res, url);
     } else {
       await handleStatic(res, url);
@@ -213,5 +236,5 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`\n  🎡  Date Night Wheel running at http://localhost:${PORT}`);
-  console.log(`      Saving picks to ${path.relative(ROOT, DATA_FILE)}\n`);
+  console.log(`      Saving picks to ${path.relative(ROOT, DATA_DIR)}\\{${[...LISTS].join(',')}}.json\n`);
 });

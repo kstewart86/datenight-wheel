@@ -1,0 +1,22 @@
+[
+  {
+    "id": "lobby",
+    "name": "Lobby",
+    "weight": 8
+  },
+  {
+    "id": "bones",
+    "name": "Bones",
+    "weight": 8
+  },
+  {
+    "id": "jacks",
+    "name": "Jack's",
+    "weight": 1
+  },
+  {
+    "id": "stay-home",
+    "name": "Stay Home",
+    "weight": 1
+  }
+]
