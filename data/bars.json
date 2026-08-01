@@ -2,12 +2,12 @@
   {
     "id": "lobby",
     "name": "Lobby",
-    "weight": 8
+    "weight": 14
   },
   {
     "id": "bones",
     "name": "Bones",
-    "weight": 8
+    "weight": 2
   },
   {
     "id": "jacks",

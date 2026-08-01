@@ -43,6 +43,10 @@
     '#d64545', '#ec9a3c', '#57b894', '#4f8ede',
   ];
 
+  // Bump alongside the ?v= on the script/stylesheet tags in index.html so a
+  // deploy can't leave a visitor on a cached mix of old and new files.
+  const ASSET_VERSION = 3;
+
   const TAU = Math.PI * 2;
   const POINTER = -Math.PI / 2; // wheel pointer sits at 12 o'clock
   const SOUND_KEY = 'dnw.sound';
@@ -143,7 +147,7 @@
       return;
     }
     try {
-      const res = await fetch(`data/${list}.json`);
+      const res = await fetch(`data/${list}.json?v=${ASSET_VERSION}`);
       if (!res.ok) throw new Error('missing');
       state[list].items = normalise(await res.json());
     } catch {
