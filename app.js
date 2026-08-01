@@ -112,7 +112,9 @@
       }
     }
     els.storageNote.textContent =
-      'Offline mode: changes are saved in this browser only. Run "node server.js" to save them into data/restaurants.json.';
+      location.protocol === 'file:'
+        ? 'Opened as a file: changes are saved in this browser only. Run "node server.js" to save them into data/restaurants.json.'
+        : 'Read-only hosting: additions are saved in this browser only, not to data/restaurants.json, and other devices won’t see them.';
   }
 
   function persistLocal() {
