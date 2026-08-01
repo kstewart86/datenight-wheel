@@ -1,0 +1,6 @@
+.claude/
+node_modules/
+*.log
+data/restaurants.json.tmp
+.DS_Store
+Thumbs.db

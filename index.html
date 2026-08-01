@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Date Night Wheel</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎡</text></svg>"
+    />
+  </head>
+  <body>
+    <canvas id="confetti" aria-hidden="true"></canvas>
+
+    <main class="page">
+      <header class="masthead">
+        <p class="kicker">Tonight's the night</p>
+        <h1>Date Night Wheel</h1>
+        <p class="tagline">Stop debating. Give it a spin.</p>
+      </header>
+
+      <section class="stage">
+        <div class="wheel-wrap">
+          <div class="pointer" aria-hidden="true"></div>
+          <canvas id="wheel" width="620" height="620" role="img" aria-label="Wheel of restaurants"></canvas>
+          <button id="spin" class="spin-btn" type="button">Spin</button>
+        </div>
+
+        <p id="result" class="result" role="status" aria-live="polite">
+          <span class="result-label">Pick a fate</span>
+        </p>
+      </section>
+
+      <div class="panels">
+        <section class="panel">
+          <h2>The lineup <span id="count" class="pill"></span></h2>
+
+          <form id="add-form" class="add-form" autocomplete="off">
+            <input
+              id="add-input"
+              type="text"
+              maxlength="60"
+              placeholder="Add a new spot…"
+              aria-label="New restaurant name"
+              required
+            />
+            <button type="submit" class="btn-primary">Add</button>
+          </form>
+
+          <p id="notice" class="notice" role="alert" hidden></p>
+          <ul id="list" class="list"></ul>
+          <p id="storage-note" class="storage-note"></p>
+        </section>
+
+        <section class="panel">
+          <h2>Recent spins</h2>
+          <ol id="history" class="history"></ol>
+          <button id="clear-history" class="btn-ghost" type="button" hidden>Clear history</button>
+        </section>
+      </div>
+
+      <footer class="foot">
+        <label class="sound-toggle">
+          <input id="sound" type="checkbox" checked />
+          <span>Sound</span>
+        </label>
+      </footer>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

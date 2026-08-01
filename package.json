@@ -1,0 +1,10 @@
+{
+  "name": "date-night-wheel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A spinning wheel that picks where to have date night.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  }
+}
