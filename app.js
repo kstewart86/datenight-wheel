@@ -45,7 +45,13 @@
 
   // Bump alongside the ?v= on the script/stylesheet tags in index.html so a
   // deploy can't leave a visitor on a cached mix of old and new files.
-  const ASSET_VERSION = 3;
+  const ASSET_VERSION = 4;
+
+  // Spin feel. The wheel ramps up over the first ACCEL of its run, then coasts
+  // down on a linear velocity decay — constant friction, like a real wheel.
+  const SPIN_MS = [9000, 11500];
+  const SPIN_TURNS = [10, 14];
+  const ACCEL = 0.08;
 
   const TAU = Math.PI * 2;
   const POINTER = -Math.PI / 2; // wheel pointer sits at 12 o'clock
@@ -458,6 +464,18 @@
    * spinning
    * ------------------------------------------------------------------ */
 
+  // Fraction of the total distance covered by time t (0..1).
+  //
+  // Angular velocity ramps 0 -> peak across the first ACCEL of the run, then
+  // falls linearly back to 0. Integrating that triangular profile gives the
+  // curve below, normalised so it lands exactly on 1 at t = 1.
+  function spinEase(t) {
+    if (t < ACCEL) return (t * t) / ACCEL;
+    const rest = 1 - ACCEL;
+    const remaining = 1 - t;
+    return ACCEL + (rest * rest - remaining * remaining) / rest;
+  }
+
   function spin() {
     const w = wheel();
     if (spinning || w.slices.length === 0) return;
@@ -475,17 +493,18 @@
     const targetRotation = POINTER - target * seg - jitter;
     const from = w.rotation;
     const delta = ((targetRotation - from) % TAU + TAU) % TAU;
-    const turns = 5 + Math.floor(Math.random() * 3);
+    const turns = SPIN_TURNS[0] + Math.floor(Math.random() * (SPIN_TURNS[1] - SPIN_TURNS[0] + 1));
     const distance = turns * TAU + delta;
-    const duration = reduceMotion ? 600 : 4600 + Math.random() * 900;
+    const duration = reduceMotion
+      ? 900
+      : SPIN_MS[0] + Math.random() * (SPIN_MS[1] - SPIN_MS[0]);
 
     let lastSlice = sliceAt(from);
     const start = performance.now();
 
     function frame(now) {
       const t = Math.min((now - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - t, 4); // easeOutQuart
-      w.rotation = from + distance * eased;
+      w.rotation = from + distance * spinEase(t);
       if (active === list) drawWheel();
 
       const current = sliceAt(w.rotation);
