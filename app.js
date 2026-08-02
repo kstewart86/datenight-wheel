@@ -48,12 +48,13 @@
 
   // Bump alongside the ?v= on the script/stylesheet tags in index.html so a
   // deploy can't leave a visitor on a cached mix of old and new files.
-  const ASSET_VERSION = 8;
+  const ASSET_VERSION = 9;
 
   // Spin feel. The wheel ramps up over the first ACCEL of its run, then coasts
   // down on a linear velocity decay — constant friction, like a real wheel.
   const SPIN_MS = [9000, 11500];
   const SPIN_TURNS = [10, 14];
+  const REDUCED_TURNS = 4;
   const ACCEL = 0.08;
 
   const TAU = Math.PI * 2;
@@ -610,11 +611,15 @@
     const targetRotation = POINTER - target * seg - jitter;
     const from = w.rotation;
     const delta = ((targetRotation - from) % TAU + TAU) % TAU;
-    const turns = SPIN_TURNS[0] + Math.floor(Math.random() * (SPIN_TURNS[1] - SPIN_TURNS[0] + 1));
+    // Reduced motion spins fewer revolutions, so the wheel turns more gently,
+    // but it still takes the full time. Cutting the spin short instead made it
+    // snap round in under a second — and iOS reports reduced motion whenever
+    // Low Power Mode is on, so that hit people who never asked for it.
+    const turns = reduceMotion
+      ? REDUCED_TURNS
+      : SPIN_TURNS[0] + Math.floor(Math.random() * (SPIN_TURNS[1] - SPIN_TURNS[0] + 1));
     const distance = turns * TAU + delta;
-    const duration = reduceMotion
-      ? 900
-      : SPIN_MS[0] + Math.random() * (SPIN_MS[1] - SPIN_MS[0]);
+    const duration = SPIN_MS[0] + Math.random() * (SPIN_MS[1] - SPIN_MS[0]);
 
     let lastSlice = sliceAt(from);
     const start = performance.now();
