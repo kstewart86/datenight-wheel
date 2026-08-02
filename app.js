@@ -167,7 +167,7 @@
     }
   }
 
-  function loadOverlay(list, base) {
+  function loadOverlay(list) {
     const stored = load(overlayKey(list), null);
     if (stored) {
       return {
@@ -177,21 +177,20 @@
       };
     }
 
-    // Migrate an old whole-list snapshot: keep only the entries it holds that
-    // aren't published, and let everything else come from the file again. We
-    // deliberately don't infer deletions from it — the snapshot predates the
-    // current file, so "missing" there usually means "published since".
+    // Retire an old whole-list snapshot by dropping back to the published
+    // list. An entry in the snapshot but not in the file is ambiguous — it
+    // could be a local addition or something deleted upstream since — and
+    // there's no old file to compare against, so guessing would resurrect
+    // deleted entries. The snapshot is kept under a backup key rather than
+    // thrown away outright.
     const legacy = load(legacyListKey(list), null);
     if (Array.isArray(legacy)) {
-      const overlay = emptyOverlay();
-      overlay.added = normalise(legacy.filter((r) => !base.some((b) => b.id === r.id)));
+      save(`dnw.backup.${list}`, legacy);
       try {
         localStorage.removeItem(legacyListKey(list));
       } catch {
         /* ignore */
       }
-      save(overlayKey(list), overlay);
-      return overlay;
     }
 
     return emptyOverlay();
@@ -212,7 +211,7 @@
       return;
     }
     state[list].base = await fetchBase(list);
-    state[list].overlay = loadOverlay(list, state[list].base);
+    state[list].overlay = loadOverlay(list);
     applyOverlay(list);
   }
 
