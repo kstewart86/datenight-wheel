@@ -15,23 +15,38 @@
     "weight": 1
   },
   {
-    "id": "marios",
-    "name": "Mario's",
-    "weight": 1
-  },
-  {
-    "id": "bonny-moon-beach-club",
-    "name": "Bonny Moon Beach Club",
-    "weight": 1
-  },
-  {
-    "id": "luca",
-    "name": "Luca",
-    "weight": 1
-  },
-  {
     "id": "ms-pipers",
     "name": "Ms. Piper's",
+    "weight": 1
+  },
+  {
+    "id": "sunset-house",
+    "name": "Sunset House",
+    "weight": 1
+  },
+  {
+    "id": "peppers",
+    "name": "Peppers",
+    "weight": 1
+  },
+  {
+    "id": "paradise-pizza",
+    "name": "Paradise Pizza",
+    "weight": 1
+  },
+  {
+    "id": "hive",
+    "name": "Hive",
+    "weight": 1
+  },
+  {
+    "id": "casa-43",
+    "name": "Casa 43",
+    "weight": 1
+  },
+  {
+    "id": "sunshine-grill",
+    "name": "Sunshine Grill",
     "weight": 1
   }
 ]
