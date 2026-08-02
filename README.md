@@ -40,6 +40,8 @@ says which mode it's in under the list.
 ## Features
 
 - Weighted random spin with easing, ticking, and a confetti finish
+- The winning name links to that restaurant's menu (`url` on the entry;
+  entries without one just render as plain text)
 - Add, rename, re-weight, and delete entries on either wheel
 - Live odds per entry (`×8 · 44%`)
 - Last 12 spins kept per wheel as history (stored per-browser)

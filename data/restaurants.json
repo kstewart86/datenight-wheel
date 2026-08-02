@@ -2,51 +2,61 @@
   {
     "id": "grand-old-house",
     "name": "Grand Old House",
-    "weight": 1
+    "weight": 1,
+    "url": "https://www.grandoldhouse.com/waterfront-restaurant-in-cayman-islands-fine-dining/best-dinner-menu-in-grand-cayman"
   },
   {
     "id": "the-wharf",
     "name": "The Wharf",
-    "weight": 1
+    "weight": 1,
+    "url": "https://www.wharf.ky/menus"
   },
   {
     "id": "agua",
     "name": "Agua",
-    "weight": 1
+    "weight": 1,
+    "url": "https://www.agua.ky/dinner-menu/"
   },
   {
     "id": "ms-pipers",
     "name": "Ms. Piper's",
-    "weight": 1
+    "weight": 1,
+    "url": "https://www.mspipers.ky/"
   },
   {
     "id": "sunset-house",
     "name": "Sunset House",
-    "weight": 1
+    "weight": 1,
+    "url": "https://sunsethouse.com/dining/"
   },
   {
     "id": "peppers",
     "name": "Peppers",
-    "weight": 1
+    "weight": 1,
+    "url": "https://www.peppers.ky/menu"
   },
   {
     "id": "paradise-pizza",
     "name": "Paradise Pizza",
-    "weight": 1
+    "weight": 1,
+    "url": "https://www.paradise.pizza/menus"
   },
   {
     "id": "hive",
     "name": "Hive",
-    "weight": 1
+    "weight": 1,
+    "url": "https://www.thehive.ky/"
   },
   {
     "id": "casa-43",
     "name": "Casa 43",
-    "weight": 1
+    "weight": 1,
+    "url": "https://casa43.ky/food/food-menu/"
   },
   {
     "id": "sunshine-grill",
     "name": "Sunshine Grill",
-    "weight": 1
+    "weight": 1,
+    "url": "https://sunshinesuites.com/sunshine-grill/"
   }
 ]

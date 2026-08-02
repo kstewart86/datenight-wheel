@@ -214,6 +214,28 @@ body {
   color: var(--gold);
 }
 
+.result-link {
+  color: inherit;
+  text-decoration-color: rgba(255, 196, 107, 0.5);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 5px;
+  transition: text-decoration-color 0.18s ease, color 0.18s ease;
+}
+
+.result-link::after {
+  content: "↗";
+  font-size: 0.6em;
+  margin-left: 0.25em;
+  vertical-align: super;
+  opacity: 0.7;
+}
+
+.result-link:hover,
+.result-link:focus-visible {
+  color: #fff;
+  text-decoration-color: var(--gold);
+}
+
 @keyframes pop {
   0% {
     transform: scale(0.8);

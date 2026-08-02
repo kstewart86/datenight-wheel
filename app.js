@@ -6,16 +6,16 @@
   // data/*.json can't be fetched. The server copies are the real source.
   const SEED = {
     restaurants: [
-      { id: 'grand-old-house', name: 'Grand Old House', weight: 1 },
-      { id: 'the-wharf', name: 'The Wharf', weight: 1 },
-      { id: 'agua', name: 'Agua', weight: 1 },
-      { id: 'ms-pipers', name: "Ms. Piper's", weight: 1 },
-      { id: 'sunset-house', name: 'Sunset House', weight: 1 },
-      { id: 'peppers', name: 'Peppers', weight: 1 },
-      { id: 'paradise-pizza', name: 'Paradise Pizza', weight: 1 },
-      { id: 'hive', name: 'Hive', weight: 1 },
-      { id: 'casa-43', name: 'Casa 43', weight: 1 },
-      { id: 'sunshine-grill', name: 'Sunshine Grill', weight: 1 },
+      { id: 'grand-old-house', name: 'Grand Old House', weight: 1, url: 'https://www.grandoldhouse.com/waterfront-restaurant-in-cayman-islands-fine-dining/best-dinner-menu-in-grand-cayman' },
+      { id: 'the-wharf', name: 'The Wharf', weight: 1, url: 'https://www.wharf.ky/menus' },
+      { id: 'agua', name: 'Agua', weight: 1, url: 'https://www.agua.ky/dinner-menu/' },
+      { id: 'ms-pipers', name: "Ms. Piper's", weight: 1, url: 'https://www.mspipers.ky/' },
+      { id: 'sunset-house', name: 'Sunset House', weight: 1, url: 'https://sunsethouse.com/dining/' },
+      { id: 'peppers', name: 'Peppers', weight: 1, url: 'https://www.peppers.ky/menu' },
+      { id: 'paradise-pizza', name: 'Paradise Pizza', weight: 1, url: 'https://www.paradise.pizza/menus' },
+      { id: 'hive', name: 'Hive', weight: 1, url: 'https://www.thehive.ky/' },
+      { id: 'casa-43', name: 'Casa 43', weight: 1, url: 'https://casa43.ky/food/food-menu/' },
+      { id: 'sunshine-grill', name: 'Sunshine Grill', weight: 1, url: 'https://sunshinesuites.com/sunshine-grill/' },
     ],
     bars: [
       { id: 'lobby', name: 'Lobby', weight: 14 },
@@ -48,7 +48,7 @@
 
   // Bump alongside the ?v= on the script/stylesheet tags in index.html so a
   // deploy can't leave a visitor on a cached mix of old and new files.
-  const ASSET_VERSION = 9;
+  const ASSET_VERSION = 10;
 
   // Spin feel. The wheel ramps up over the first ACCEL of its run, then coasts
   // down on a linear velocity decay — constant friction, like a real wheel.
@@ -647,12 +647,39 @@
     requestAnimationFrame(frame);
   }
 
+  // Only ever link out to a real web address. Entries come from our own data
+  // files, but a stored overlay is user-writable, so don't trust it blindly.
+  function menuLink(item) {
+    if (!item.url) return null;
+    try {
+      // No base URL: a menu link must be an absolute http(s) address, so
+      // anything relative or oddly-schemed is rejected rather than resolved.
+      const url = new URL(item.url);
+      return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null;
+    } catch {
+      return null;
+    }
+  }
+
   function finish(list, winner) {
     spinning = false;
     els.spin.disabled = state[active].slices.length === 0;
     if (!winner) return;
 
-    els.result.textContent = `Tonight: ${winner.name}`;
+    els.result.textContent = 'Tonight: ';
+    const menu = menuLink(winner);
+    if (menu) {
+      const link = document.createElement('a');
+      link.className = 'result-link';
+      link.href = menu;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.title = `See the menu for ${winner.name}`;
+      link.textContent = winner.name;
+      els.result.append(link);
+    } else {
+      els.result.append(document.createTextNode(winner.name));
+    }
     els.result.classList.add('win');
     sound.fanfare();
     if (!reduceMotion) launchConfetti();
