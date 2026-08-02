@@ -18,5 +18,10 @@
     "id": "stay-home",
     "name": "Stay Home",
     "weight": 1
+  },
+  {
+    "id": "rackams",
+    "name": "Rackam's",
+    "weight": 1
   }
 ]

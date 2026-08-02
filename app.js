@@ -16,12 +16,14 @@
       { id: 'hive', name: 'Hive', weight: 1, url: 'https://www.thehive.ky/' },
       { id: 'casa-43', name: 'Casa 43', weight: 1, url: 'https://casa43.ky/food/food-menu/' },
       { id: 'sunshine-grill', name: 'Sunshine Grill', weight: 1, url: 'https://sunshinesuites.com/sunshine-grill/' },
+      { id: 'gtyc', name: 'GTYC', weight: 1, url: 'https://www.gtyachtclub.com/menus-2' },
     ],
     bars: [
       { id: 'lobby', name: 'Lobby', weight: 14 },
       { id: 'bones', name: 'Bones', weight: 2 },
       { id: 'jacks', name: "Jack's", weight: 1 },
       { id: 'stay-home', name: 'Stay Home', weight: 1 },
+      { id: 'rackams', name: "Rackam's", weight: 1 },
     ],
   };
 
@@ -48,7 +50,7 @@
 
   // Bump alongside the ?v= on the script/stylesheet tags in index.html so a
   // deploy can't leave a visitor on a cached mix of old and new files.
-  const ASSET_VERSION = 10;
+  const ASSET_VERSION = 11;
 
   // Spin feel. The wheel ramps up over the first ACCEL of its run, then coasts
   // down on a linear velocity decay — constant friction, like a real wheel.
