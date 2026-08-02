@@ -48,7 +48,7 @@
 
   // Bump alongside the ?v= on the script/stylesheet tags in index.html so a
   // deploy can't leave a visitor on a cached mix of old and new files.
-  const ASSET_VERSION = 7;
+  const ASSET_VERSION = 8;
 
   // Spin feel. The wheel ramps up over the first ACCEL of its run, then coasts
   // down on a linear velocity decay — constant friction, like a real wheel.
