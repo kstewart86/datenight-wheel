@@ -45,7 +45,7 @@
 
   // Bump alongside the ?v= on the script/stylesheet tags in index.html so a
   // deploy can't leave a visitor on a cached mix of old and new files.
-  const ASSET_VERSION = 4;
+  const ASSET_VERSION = 5;
 
   // Spin feel. The wheel ramps up over the first ACCEL of its run, then coasts
   // down on a linear velocity decay — constant friction, like a real wheel.
@@ -195,30 +195,75 @@
    * slices
    * ------------------------------------------------------------------ */
 
-  // Expand weights into individual slices, interleaved so repeats of the same
-  // place are spread around the wheel instead of forming one giant wedge.
-  // Uses the Sainte-Laguë divisor method: pick whoever is furthest behind.
+  // Expand weights into individual slices, spread evenly around the wheel.
+  //
+  // Each entry claims slots on a stride of total/weight, so its own slices sit
+  // opposite each other, and heavier entries claim first. Lighter entries then
+  // settle into the roomiest gaps left behind, which keeps the one-off options
+  // spaced out through the dominant entry rather than bunched together.
   function buildSlices(items) {
     const total = items.reduce((sum, r) => sum + r.weight, 0);
-    const placed = items.map(() => 0);
-    const slices = [];
+    if (total === 0) return [];
 
-    for (let n = 0; n < total; n++) {
-      let best = -1;
+    // Nothing to balance when every entry carries the same weight — keep the
+    // list's own order so the wheel matches what's written underneath it.
+    if (items.every((r) => r.weight === items[0].weight)) {
+      const even = [];
+      for (let pass = 0; pass < items[0].weight; pass++) items.forEach((_, i) => even.push(i));
+      return even;
+    }
+
+    const slots = new Array(total).fill(-1);
+    const heaviestFirst = items
+      .map((r, index) => ({ index, weight: r.weight }))
+      .sort((a, b) => b.weight - a.weight || a.index - b.index);
+
+    heaviestFirst.forEach(({ index, weight }) => {
+      const stride = total / weight;
+      let chosen = null;
       let bestScore = -Infinity;
-      items.forEach((r, i) => {
-        if (placed[i] >= r.weight) return;
-        const score = r.weight / (2 * placed[i] + 1);
+
+      for (let start = 0; start < total; start++) {
+        const candidate = [];
+        for (let k = 0; k < weight; k++) candidate.push(Math.round(start + k * stride) % total);
+        if (candidate.some((slot) => slots[slot] !== -1)) continue;
+
+        // Prefer the placement that leaves the most free neighbours, i.e. the
+        // one sitting in the widest gaps.
+        const score = candidate.reduce(
+          (sum, slot) =>
+            sum +
+            (slots[(slot + 1) % total] === -1 ? 1 : 0) +
+            (slots[(slot - 1 + total) % total] === -1 ? 1 : 0),
+          0
+        );
         if (score > bestScore) {
           bestScore = score;
-          best = i;
+          chosen = candidate;
         }
-      });
-      if (best === -1) break;
-      placed[best]++;
-      slices.push(best);
-    }
-    return slices;
+      }
+
+      if (chosen) {
+        chosen.forEach((slot) => {
+          slots[slot] = index;
+        });
+        return;
+      }
+
+      // No clean stride available — fall back to the nearest free slot.
+      for (let k = 0; k < weight; k++) {
+        const ideal = Math.round(k * stride) % total;
+        for (let step = 0; step < total; step++) {
+          const slot = (ideal + step) % total;
+          if (slots[slot] === -1) {
+            slots[slot] = index;
+            break;
+          }
+        }
+      }
+    });
+
+    return slots;
   }
 
   function rebuildSlices(list) {

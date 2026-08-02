@@ -20,8 +20,11 @@ Use a different port with `node server.js --port 8080`.
 Each entry has a `weight`: how many slices it gets on the wheel. Weight 1 is the
 default; the bar wheel ships with Lobby and Bones at 8 each against Jack's and
 Stay Home at 1, so the two favourites take ~44% each and the long shots ~6%.
-Repeated slices are interleaved around the wheel rather than stacked into one
-wedge, so it reads like a roulette wheel instead of a pie chart.
+Repeated slices are spread evenly around the wheel rather than stacked into one
+wedge, so it reads like a roulette wheel instead of a pie chart. Heavier entries
+claim their slots first on an even stride; the lighter one-offs then settle into
+the widest remaining gaps, so they end up spaced through the dominant entry
+instead of bunched next to each other.
 
 ## How the lists are saved
 
