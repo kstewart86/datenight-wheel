@@ -6,7 +6,7 @@
     <title>Date Night Wheel</title>
     <!-- Bump ?v= on both assets when deploying (and ASSET_VERSION in app.js),
          so returning visitors don't get a stale cached copy from Pages. -->
-    <link rel="stylesheet" href="styles.css?v=6" />
+    <link rel="stylesheet" href="styles.css?v=7" />
     <link
       rel="icon"
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎡</text></svg>"
@@ -77,6 +77,9 @@
           <p id="notice" class="notice" role="alert" hidden></p>
           <ul id="list" class="list"></ul>
           <p id="storage-note" class="storage-note"></p>
+          <button id="reset-local" class="btn-ghost" type="button" hidden>
+            Discard my changes on this device
+          </button>
         </section>
 
         <section class="panel">
@@ -94,6 +97,6 @@
       </footer>
     </main>
 
-    <script src="app.js?v=6"></script>
+    <script src="app.js?v=7"></script>
   </body>
 </html>

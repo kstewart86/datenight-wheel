@@ -9,14 +9,17 @@
       { id: 'grand-old-house', name: 'Grand Old House', weight: 1 },
       { id: 'the-wharf', name: 'The Wharf', weight: 1 },
       { id: 'agua', name: 'Agua', weight: 1 },
-      { id: 'marios', name: "Mario's", weight: 1 },
-      { id: 'bonny-moon-beach-club', name: 'Bonny Moon Beach Club', weight: 1 },
-      { id: 'luca', name: 'Luca', weight: 1 },
       { id: 'ms-pipers', name: "Ms. Piper's", weight: 1 },
+      { id: 'sunset-house', name: 'Sunset House', weight: 1 },
+      { id: 'peppers', name: 'Peppers', weight: 1 },
+      { id: 'paradise-pizza', name: 'Paradise Pizza', weight: 1 },
+      { id: 'hive', name: 'Hive', weight: 1 },
+      { id: 'casa-43', name: 'Casa 43', weight: 1 },
+      { id: 'sunshine-grill', name: 'Sunshine Grill', weight: 1 },
     ],
     bars: [
-      { id: 'lobby', name: 'Lobby', weight: 8 },
-      { id: 'bones', name: 'Bones', weight: 8 },
+      { id: 'lobby', name: 'Lobby', weight: 14 },
+      { id: 'bones', name: 'Bones', weight: 2 },
       { id: 'jacks', name: "Jack's", weight: 1 },
       { id: 'stay-home', name: 'Stay Home', weight: 1 },
     ],
@@ -45,7 +48,7 @@
 
   // Bump alongside the ?v= on the script/stylesheet tags in index.html so a
   // deploy can't leave a visitor on a cached mix of old and new files.
-  const ASSET_VERSION = 6;
+  const ASSET_VERSION = 7;
 
   // Spin feel. The wheel ramps up over the first ACCEL of its run, then coasts
   // down on a linear velocity decay — constant friction, like a real wheel.
@@ -75,6 +78,7 @@
     history: $('history'),
     clearHistory: $('clear-history'),
     storageNote: $('storage-note'),
+    resetLocal: $('reset-local'),
     sound: $('sound'),
     tagline: $('tagline'),
     panelTitle: $('panel-title'),
@@ -86,8 +90,8 @@
   // Per-wheel state. `slices` holds one entry index per wheel slice, so an
   // item with weight 8 appears in eight places.
   const state = {
-    restaurants: { items: [], slices: [], rotation: 0, history: [] },
-    bars: { items: [], slices: [], rotation: 0, history: [] },
+    restaurants: { items: [], base: [], overlay: null, slices: [], rotation: 0, history: [] },
+    bars: { items: [], base: [], overlay: null, slices: [], rotation: 0, history: [] },
   };
 
   let active = 'restaurants';
@@ -101,7 +105,10 @@
    * ------------------------------------------------------------------ */
 
   const historyKey = (list) => `dnw.history.${list}`;
-  const listKey = (list) => `dnw.list.${list}`;
+  const overlayKey = (list) => `dnw.overlay.${list}`;
+  // Pre-overlay storage: a whole-list snapshot that shadowed the published
+  // file forever. Migrated away on load, never written again.
+  const legacyListKey = (list) => `dnw.list.${list}`;
 
   function load(key, fallback) {
     try {
@@ -141,24 +148,72 @@
     return items.map((r) => ({ ...r, weight: Math.max(1, Math.min(MAX_WEIGHT, Number(r.weight) || 1)) }));
   }
 
+  // Without the server we can't write to data/*.json, so local changes are kept
+  // as an overlay on top of the published file rather than as a copy of it.
+  // A copy would freeze the wheel at whatever it looked like on the day of the
+  // first edit, and later publishes would never reach this browser again.
+  const emptyOverlay = () => ({ added: [], removed: [], edits: {} });
+
+  const overlayIsEmpty = (overlay) =>
+    overlay.added.length === 0 && overlay.removed.length === 0 && Object.keys(overlay.edits).length === 0;
+
+  async function fetchBase(list) {
+    try {
+      const res = await fetch(`data/${list}.json?v=${ASSET_VERSION}`);
+      if (!res.ok) throw new Error('missing');
+      return normalise(await res.json());
+    } catch {
+      return normalise(SEED[list]);
+    }
+  }
+
+  function loadOverlay(list, base) {
+    const stored = load(overlayKey(list), null);
+    if (stored) {
+      return {
+        added: normalise(stored.added || []),
+        removed: stored.removed || [],
+        edits: stored.edits || {},
+      };
+    }
+
+    // Migrate an old whole-list snapshot: keep only the entries it holds that
+    // aren't published, and let everything else come from the file again. We
+    // deliberately don't infer deletions from it — the snapshot predates the
+    // current file, so "missing" there usually means "published since".
+    const legacy = load(legacyListKey(list), null);
+    if (Array.isArray(legacy)) {
+      const overlay = emptyOverlay();
+      overlay.added = normalise(legacy.filter((r) => !base.some((b) => b.id === r.id)));
+      try {
+        localStorage.removeItem(legacyListKey(list));
+      } catch {
+        /* ignore */
+      }
+      save(overlayKey(list), overlay);
+      return overlay;
+    }
+
+    return emptyOverlay();
+  }
+
+  function applyOverlay(list) {
+    const { base, overlay } = state[list];
+    const removed = new Set(overlay.removed);
+    const items = base
+      .filter((r) => !removed.has(r.id))
+      .map((r) => (overlay.edits[r.id] ? { ...r, ...overlay.edits[r.id] } : r));
+    state[list].items = normalise(items.concat(overlay.added));
+  }
+
   async function loadWheel(list) {
     if (hasApi) {
       state[list].items = normalise(await api(list, '', { method: 'GET' }));
       return;
     }
-
-    const stored = load(listKey(list), null);
-    if (stored) {
-      state[list].items = normalise(stored);
-      return;
-    }
-    try {
-      const res = await fetch(`data/${list}.json?v=${ASSET_VERSION}`);
-      if (!res.ok) throw new Error('missing');
-      state[list].items = normalise(await res.json());
-    } catch {
-      state[list].items = normalise(SEED[list]);
-    }
+    state[list].base = await fetchBase(list);
+    state[list].overlay = loadOverlay(list, state[list].base);
+    applyOverlay(list);
   }
 
   async function loadEverything() {
@@ -177,9 +232,10 @@
       await loadWheel('bars');
       els.storageNote.textContent =
         location.protocol === 'file:'
-          ? 'Opened as a file: changes are saved in this browser only. Run "node server.js" to save them into data/.'
-          : 'Read-only hosting: additions are saved in this browser only, not to the data files, and other devices won’t see them.';
+          ? 'Opened as a file: your changes are saved in this browser only. Run "node server.js" to save them into data/.'
+          : 'Read-only hosting: your changes are saved in this browser only and other devices won’t see them. Published updates still come through.';
     }
+    updateResetControl();
 
     Object.keys(state).forEach((list) => {
       state[list].history = load(historyKey(list), []);
@@ -188,7 +244,15 @@
   }
 
   function persistLocal(list) {
-    if (!hasApi) save(listKey(list), state[list].items);
+    if (hasApi) return;
+    save(overlayKey(list), state[list].overlay);
+    applyOverlay(list);
+    updateResetControl();
+  }
+
+  function updateResetControl() {
+    const dirty = !hasApi && Object.keys(state).some((list) => !overlayIsEmpty(state[list].overlay));
+    els.resetLocal.hidden = !dirty;
   }
 
   /* ------------------------------------------------------------------ *
@@ -309,10 +373,10 @@
       );
     } else {
       assertNameFree(state[list].items, name);
+      const taken = new Set([...state[list].base, ...state[list].overlay.added].map((r) => r.id));
       let id = slugify(name);
-      const taken = new Set(state[list].items.map((r) => r.id));
       for (let n = 2; taken.has(id); n++) id = `${slugify(name)}-${n}`;
-      state[list].items.push({ id, name, weight });
+      state[list].overlay.added.push({ id, name, weight });
       persistLocal(list);
     }
     rebuildSlices(list);
@@ -333,10 +397,12 @@
       );
     } else {
       assertNameFree(state[list].items, name, id);
-      const target = state[list].items.find((r) => r.id === id);
-      if (target) {
-        target.name = name;
-        target.weight = weight;
+      const local = state[list].overlay.added.find((r) => r.id === id);
+      if (local) {
+        local.name = name;
+        local.weight = weight;
+      } else {
+        state[list].overlay.edits[id] = { name, weight };
       }
       persistLocal(list);
     }
@@ -347,7 +413,14 @@
     if (hasApi) {
       state[list].items = normalise(await api(list, `/${encodeURIComponent(id)}`, { method: 'DELETE' }));
     } else {
-      state[list].items = state[list].items.filter((r) => r.id !== id);
+      const overlay = state[list].overlay;
+      const localIndex = overlay.added.findIndex((r) => r.id === id);
+      if (localIndex !== -1) {
+        overlay.added.splice(localIndex, 1);
+      } else if (!overlay.removed.includes(id)) {
+        overlay.removed.push(id);
+      }
+      delete overlay.edits[id];
       persistLocal(list);
     }
     rebuildSlices(list);
@@ -869,6 +942,22 @@
   });
 
   els.spin.addEventListener('click', spin);
+
+  els.resetLocal.addEventListener('click', () => {
+    if (!window.confirm('Discard the changes made on this device and go back to the published lists?')) {
+      return;
+    }
+    Object.keys(state).forEach((list) => {
+      state[list].overlay = emptyOverlay();
+      save(overlayKey(list), state[list].overlay);
+      applyOverlay(list);
+      rebuildSlices(list);
+    });
+    updateResetControl();
+    showNotice('');
+    renderList();
+    drawWheel();
+  });
 
   els.clearHistory.addEventListener('click', () => {
     wheel().history = [];
